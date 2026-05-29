@@ -1,0 +1,177 @@
+HTML
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>顔文字検索アプリ</title>
+<style>
+  /* アプリ全体のデザイン（背景色や文字サイズなど） */
+  body {
+    font-family: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+    text-align: center;
+    background-color: #f0f8ff; /* 優しい水色の背景 */
+    color: #333;
+    padding: 20px;
+  }
+  
+  h1 { font-size: 24px; color: #555; }
+
+  /* 検索バーのデザイン */
+  #searchInput {
+    padding: 12px;
+    width: 90%;
+    max-width: 400px;
+    font-size: 16px;
+    border-radius: 25px;
+    border: 2px solid #ccc;
+    outline: none;
+    transition: 0.3s;
+  }
+  #searchInput:focus { border-color: #87cefa; } /* 選択時に色が変わる */
+
+  /* 顔文字一覧を並べるエリア */
+  .container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 15px;
+    margin-top: 30px;
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* 顔文字1つ1つのカード */
+  .kaomoji-card {
+    background: white;
+    padding: 15px 25px;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    cursor: pointer;
+    font-size: 20px;
+    transition: 0.2s;
+  }
+  .kaomoji-card:hover {
+    transform: scale(1.1); /* マウスを乗せると少し大きくなる */
+    background-color: #e6e6fa;
+  }
+
+  /* コピー完了メッセージ */
+  #toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 20px;
+    display: none; /* 最初は隠しておく */
+    z-index: 1000;
+  }
+</style>
+</head>
+<body>
+
+  <h1>( ᐛ ) 顔文字検索アプリ ( ᐖ )</h1>
+  <p>今の気分を入力してね（例：怖い、うれしい、泣く）</p>
+  
+  <input type="text" id="searchInput" placeholder="感情や言葉を入力..." onkeyup="searchKaomoji()">
+
+  <div class="container" id="results"></div>
+
+  <div id="toast">コピーしました！</div>
+
+  <script>
+    // ▼ ここが「顔文字の初期データ」です ▼
+    const kaomojiData = [
+      // 怖い・驚く
+      { face: "( ; ﾟДﾟ)", tags: ["怖い", "こわい", "恐怖", "驚く", "びっくり"] },
+      { face: "((((；ﾟДﾟ))))", tags: ["怖い", "こわい", "ガクブル", "震える"] },
+      { face: "(>_<)", tags: ["怖い", "こわい", "痛い", "やめて"] },
+      { face: "( ºωº )", tags: ["怖い", "こわい", "絶望", "無"] },
+      { face: "∑(ﾟДﾟ)", tags: ["驚く", "びっくり", "えっ"] },
+      
+      // 嬉しい・笑う
+      { face: "(*^▽^*)", tags: ["嬉しい", "うれしい", "笑う", "笑顔", "喜ぶ"] },
+      { face: "(≧▽≦)", tags: ["嬉しい", "うれしい", "爆笑", "最高"] },
+      { face: "(*´ω｀*)", tags: ["嬉しい", "うれしい", "ほっこり", "癒し", "可愛い"] },
+      { face: "(๑˃̵ᴗ˂̵)و", tags: ["嬉しい", "うれしい", "やったー", "ガッツポーズ"] },
+      { face: "草", tags: ["笑う", "爆笑", "おもしろい"] },
+
+      // 悲しい・泣く
+      { face: "(T_T)", tags: ["悲しい", "かなしい", "泣く", "涙"] },
+      { face: "(´；ω；`)", tags: ["悲しい", "かなしい", "泣く", "うるうる"] },
+      { face: "ぴえん", tags: ["悲しい", "かなしい", "泣く", "ぴえん"] },
+      { face: "orz", tags: ["悲しい", "かなしい", "落ち込む", "絶望", "がっかり"] },
+      
+      // 怒る
+      { face: "(｀ε´)", tags: ["怒る", "おこる", "むかつく", "ぷんぷん"] },
+      { face: "(＃｀皿´)", tags: ["怒る", "おこる", "激怒", "キレる"] },
+      { face: "ಠ_ಠ", tags: ["怒る", "おこる", "ジト目", "不満"] },
+      
+      // 挨拶・その他
+      { face: "( ´ ▽ ` )ﾉ", tags: ["挨拶", "あいさつ", "おはよう", "こんにちは", "やあ"] },
+      { face: "( ˘ω˘ )ｽﾔｧ", tags: ["寝る", "おやすみ", "睡眠"] },
+      { face: "( ᐛ )", tags: ["アホ", "パー", "顔文字"] },
+      { face: "m(_ _)m", tags: ["ごめん", "謝る", "お願い", "よろしく"] },
+      { face: "(・∀・)ｲｲﾈ!!", tags: ["いいね", "グッド", "最高", "賛成"] }
+    ];
+
+    const resultsContainer = document.getElementById('results');
+
+    // 画面に顔文字を表示する機能
+    function displayKaomoji(dataArray) {
+      resultsContainer.innerHTML = ''; // 一旦空にする
+
+      if (dataArray.length === 0) {
+        resultsContainer.innerHTML = '<p>見つかりませんでした( ；∀；)</p>';
+        return;
+      }
+
+      dataArray.forEach(item => {
+        // カード（divタグ）を作る
+        const card = document.createElement('div');
+        card.className = 'kaomoji-card';
+        card.innerText = item.face;
+        
+        // クリックしたらコピーする動きをつける
+        card.onclick = () => copyToClipboard(item.face);
+        
+        // 画面に追加する
+        resultsContainer.appendChild(card);
+      });
+    }
+
+    // 検索バーに文字が入力された時に動く機能
+    function searchKaomoji() {
+      const keyword = document.getElementById('searchInput').value.toLowerCase();
+      
+      // 入力された文字が「タグ」に含まれている顔文字だけを絞り込む
+      const filteredData = kaomojiData.filter(item => {
+        return item.tags.some(tag => tag.includes(keyword));
+      });
+
+      // 絞り込んだ結果を表示する
+      displayKaomoji(filteredData);
+    }
+
+    // クリップボードにコピーする機能
+    function copyToClipboard(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        // コピー成功したらメッセージを少しの間だけ表示する
+        const toast = document.getElementById('toast');
+        toast.style.display = 'block';
+        setTimeout(() => {
+          toast.style.display = 'none';
+        }, 1500); // 1.5秒後に消える
+      });
+    }
+
+    // 最初はすべての顔文字を表示しておく
+    displayKaomoji(kaomojiData);
+
+  </script>
+</body>
+</html>
